@@ -31,7 +31,6 @@ BUILD_LANGS = [ 'en', # base strings
     'zh_Hans',
     'zh_Hant'
 ]
-MODE = 'compile'
 ESCAPES = {
     '\\': '\\',
     '"': '"',
@@ -40,18 +39,14 @@ ESCAPES = {
     't': '\t',
     'v': '\v',
 }
-missing_count = {}
-for lang in BUILD_LANGS:
-    missing_count[lang] = 0
-
-if '--new' in sys.argv:
-    MODE = 'new'
+missing_count = {lang: 0 for lang in BUILD_LANGS}
+MODE = 'new' if '--new' in sys.argv else 'compile'
 
 
 def unquote(string):
     txt = string.strip()
     if txt[0] != '"' or txt[-1] != '"':
-        raise Exception("invalid quoted string: " + string)
+        raise Exception(f"invalid quoted string: {string}")
     txt = txt[1:-1]
     out = ''
     is_escape = False
@@ -72,7 +67,7 @@ def parse_po(src):
     is_multi = False  # string is multiple lines
     is_plural = False
     msg_id, msg_str, msg_index = None, None, None
-    for line in open(src, 'rt', encoding='utf-8').readlines():
+    for line in open(src, 'rt', encoding='utf-8'):
         line = line.strip()
         if is_multi:
             if len(line) == 0 or line[0] != '"':
@@ -106,10 +101,10 @@ def parse_po(src):
     # Apply plural indices to ids.
     pluralized = []
     for msg_id, msg_str, msg_index in messages:
-        if not msg_index is None:
+        if msg_index is not None:
             msg_id = f'{msg_id[:-1]}{msg_index}'
         pluralized.append((msg_id, msg_str))
-        #print(msg_id, '=>', msg_str)
+            #print(msg_id, '=>', msg_str)
     return pluralized
     
     
@@ -119,7 +114,7 @@ def compile_string(msg_id, msg_str):
     
 
 os.chdir(os.path.dirname(__file__))
-    
+
 if MODE == 'compile':
     BASE_STRINGS = {}
     PLURALS = set()
@@ -131,17 +126,15 @@ if MODE == 'compile':
         if src.endswith('.po') and src.split('.')[0] in BUILD_LANGS:
             # Make a binary blob with strings sorted by ID.
             lang_id = src[:-3]
-            have_ids = set()
-            compiled = bytes()
             lang = parse_po(src)
-            for msg_id, _ in lang:
-                have_ids.add(msg_id)
+            have_ids = {msg_id for msg_id, _ in lang}
             # Take missing strings from the base language.
-            for msg_id in BASE_STRINGS:
-                if msg_id not in have_ids and not msg_id[:-2] in PLURALS:
+            for msg_id, value in BASE_STRINGS.items():
+                if msg_id not in have_ids and msg_id[:-2] not in PLURALS:
                     #print('%10s' % src, 'missing:', msg_id)
                     missing_count[lang_id] += 1
-                    lang.append((msg_id, BASE_STRINGS[msg_id]))
+                    lang.append((msg_id, value))
+            compiled = bytes()
             for msg_id, msg_str in sorted(lang):
                 compiled += compile_string(msg_id, msg_str)
             open(f'../res/lang/{lang_id}.bin', 'wb').write(compiled)
